@@ -52,7 +52,7 @@ El prototipo está orientado a cuatro deportes: **fútbol, baloncesto, tenis y r
 | **4 deportes** | **800 / 200 eventos** train/test | **300 réplicas** por caso |
 | **60.000 observaciones** | **MAE Rate: 6,964 entradas** | **7 de 8** casos con mayor ingreso medio PDE |
 
-La evaluación histórica **V8.2**, desarrollada en una fase anterior, se documenta por separado más adelante. Sus resultados no deben confundirse con la evaluación Monte Carlo de tres políticas.
+La evaluación histórica **V8.2**, desarrollada en una fase anterior, se documenta por separado más adelante. Sus resultados no deben confundirse con la evaluación Monte Carlo de tres políticas. En este repositorio se conservan **sus resultados exportados**, pero no el script que los generó.
 
 ### Deportes compatibles
 
@@ -214,7 +214,7 @@ Una validación anterior comparó **precio fijo frente a una estrategia dinámic
 - **20 de 20** repeticiones con mejora global.
 - **24 eventos** reservados para la evaluación y **48 categorías**.
 
-Estos resultados **no corresponden** a la comparación posterior de las tres estrategias y **no deben agregarse ni interpretarse como si fueran el mismo experimento**. La evaluación histórica puede reproducirse con `v8_2_validacion.py`, y sus archivos se guardan en `frontend/public/validation/` cuando se copian allí los resultados de esa versión. La página actual del comparador se centra en la evaluación Monte Carlo del motor XGBoost + PDE.
+Estos resultados **no corresponden** a la comparación posterior de las tres estrategias y **no deben agregarse ni interpretarse como si fueran el mismo experimento**. Los resultados históricos conservados se encuentran en `frontend/public/validation/` (`v8_2_resumen.json`, `v8_2_repeticiones.csv` y `v8_2_detalle.csv`). **El script `v8_2_validacion.py` no forma parte de esta versión del repositorio**: estos resultados pueden consultarse, pero no regenerarse aquí con un comando. La página actual del comparador se centra en la evaluación Monte Carlo del motor XGBoost + PDE.
 
 ---
 
@@ -265,14 +265,20 @@ Las tres pruebas finalizaron correctamente en el entorno de desarrollo. Su ejecu
 - Python **3.10 o superior**, con versiones de dependencias compatibles.
 - Node.js y npm.
 - Git y Git LFS para gestionar los archivos grandes del repositorio.
+- Conexión a Internet durante la primera instalación (dependencias Python/npm y objetos Git LFS).
 
 ### 1. Clonar el repositorio
 
+La versión documentada corresponde a la rama `integracion-xgboost-pde-montecarlo` y al commit de referencia `ffe33de` (*Mid-Term*):
+
 ```powershell
-git clone https://github.com/Llarkruks/PAE_DynamicPricing.git
-cd PAE_DynamicPricing
+git lfs install
+git clone --branch integracion-xgboost-pde-montecarlo https://github.com/auroca/STADIUM-IQ-XGBoost-PDE-MonteCarlo.git
+cd STADIUM-IQ-XGBoost-PDE-MonteCarlo
 git lfs pull
 ```
+
+> **Git LFS es obligatorio para el simulador original**: `dataset_v2_EQUIPO_FINAL.csv` y `dataset_v2_XGBOOST_encoded_FINAL.csv` están almacenados mediante LFS. Si aparecen como ficheros de texto que comienzan por `version https://git-lfs.github.com/spec/v1`, aún no se han descargado los datos reales. El dataset multideporte y el modelo `multisport_model.joblib` se encuentran incluidos en el repositorio.
 
 ### 2. Entorno virtual e instalación Python
 
@@ -334,7 +340,7 @@ Abre **http://localhost:5173/** (o la dirección que indique Vite).
 |---|---|
 | Inicio | `/` |
 | Simulador multideporte | `/multisport` |
-| Historial de eventos | Consultar las rutas definidas en `frontend/src/App.jsx` |
+| Historial de eventos | `/history` |
 | **Comparador de estrategias** | `/validation` |
 | Simulador original | `/simulator` |
 
@@ -345,21 +351,27 @@ Abre **http://localhost:5173/** (o la dirección que indique Vite).
 ## 📁 Estructura del repositorio (archivos principales)
 
 ```text
-PAE_DynamicPricing/
+STADIUM-IQ-XGBoost-PDE-MonteCarlo/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── Sidebar.jsx
 │   │   └── pages/
+│   │       ├── Dashboard.jsx
+│   │       ├── Multisport.jsx
+│   │       ├── History.jsx
+│   │       ├── Simulator.jsx
 │   │       ├── Validation.jsx
 │   │       ├── Validation.css
 │   │       └── MonteCarloPanel.jsx
 │   └── public/
-│       └── validation/             # Resultados históricos V8.2
-├── api_multisport.py
-├── main.py
+│       └── validation/             # Resultados exportados V8.2
+├── api_multisport.py               # API multideporte y comparador
+├── main.py                         # API simulador original
 ├── generar_dataset.py
 ├── dataset_multideporte_EQUIPO.csv
+├── dataset_v2_EQUIPO_FINAL.csv     # Git LFS: simulador original
+├── dataset_v2_XGBOOST_encoded_FINAL.csv  # Git LFS
 ├── multisport_model.py
 ├── multisport_model.joblib
 ├── multisport_model_metrics.json
@@ -367,7 +379,8 @@ PAE_DynamicPricing/
 ├── integracion_xgboost_pde.py
 ├── simulacion_montecarlo_xgboost.py
 ├── validar_multideporte_stadium.py
-├── v8_2_validacion.py
+├── train_model.py                  # Cadena histórica simulador original
+├── pricing_optimizer.py           # Cadena histórica simulador original
 ├── tests/
 │   └── test_integracion_corregida.py
 ├── requirements.txt
@@ -388,11 +401,9 @@ Ejecuta estos comandos desde la raíz del proyecto, con el entorno virtual activ
 python multisport_model.py train
 ```
 
-**Evaluación predictiva:**
+**Métricas predictivas conservadas:**
 
-```powershell
-python validate_v7.py
-```
+Las métricas del modelo ya entrenado (MAE, RMSE y R²) se encuentran en `multisport_model_metrics.json`. **No se incluye `validate_v7.py`** en esta rama, por lo que no existe un comando independiente de validación V7 listo para ejecutar. El comando de entrenamiento anterior puede reconstruir el modelo y sus métricas, pero modifica los artefactos guardados; para reproducirlos exactamente hay que controlar la versión de dependencias, la semilla y los datos.
 
 **Pruebas del motor integrado:**
 
@@ -428,13 +439,23 @@ python validar_multideporte_stadium.py `
 
 Los CSV de esta prueba se generan en `resultados/validacion_multideporte/`, incluidos `resumen_eventos.csv`, `resumen_deportes.csv` y `trayectorias.csv`.
 
-**Reproducir la evaluación histórica V8.2:**
+**Consultar la evaluación histórica V8.2:**
+
+Los ficheros históricos ya incluidos pueden examinarse en `frontend/public/validation/`. **No se incluye `v8_2_validacion.py`**, por lo que el experimento original no puede volver a ejecutarse desde esta rama. Son resultados de una fase anterior y no alimentan el comparador Monte Carlo actual.
+
+**Comprobar el código y el frontend:**
 
 ```powershell
-python v8_2_validacion.py --repeticiones 20
+python -m pytest tests/test_integracion_corregida.py -v
+python -m py_compile api_multisport.py integracion_xgboost_pde.py predictor_xgboost.py simulacion_montecarlo_xgboost.py
+cd frontend
+npm run build
+cd ..
 ```
 
-> El análisis V8.2 es independiente del comparador de tres políticas. No es necesario ejecutarlo ni copiar sus CSV para que funcione la nueva página de Monte Carlo.
+> Para ejecutar pytest instala `pytest` como se indicó en la sección de instalación. Las pruebas cubren tres casos de integración, no una batería completa end-to-end.
+
+**Nota de reproducibilidad:** `requirements.txt` no fija versiones exactas. El proyecto se ha utilizado con Python 3.12 en Windows, pero la compatibilidad de los modelos serializados puede variar entre versiones de XGBoost/scikit-learn. Para replicar los resultados numéricos exactamente se necesita congelar el entorno y las semillas; los resultados previos no están garantizados con cualquier versión futura de paquetes.
 
 ---
 
