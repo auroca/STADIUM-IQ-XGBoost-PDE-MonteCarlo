@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
+import MonteCarloPanel from "./MonteCarloPanel";
 
 import {
   ResponsiveContainer,
@@ -789,6 +790,9 @@ export default function Validation() {
           </div>
         )}
       </section>
+
+      {/* NUEVA SECCIÓN: MONTE CARLO */}
+      <MonteCarloPanel />
 
       <footer className="validation-footer">
         <strong>Interpretación de los resultados</strong>

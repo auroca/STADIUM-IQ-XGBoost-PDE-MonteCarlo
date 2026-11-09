@@ -861,6 +861,463 @@ def optimize_custom(req: CustomPrediction):
     )
     return output
 
+# ============================================================
+# INTEGRACIÓN XGBOOST + PROGRAMACIÓN DINÁMICA ESTOCÁSTICA
+# ============================================================
+
+from integracion_xgboost_pde import resolver
+
+
+@app.post("/api/v7/pde/optimize")
+def optimize_pde(
+    req: Prediction,
+    forma_nb: float = Query(default=9.0, gt=0, le=100)
+):
+    """
+    Optimización de precios considerando los días restantes.
+
+    Utiliza:
+    - XGBoost para estimar ventas.
+    - Binomial negativa para representar incertidumbre.
+    - PDE para maximizar los ingresos acumulados esperados.
+
+    Endpoint experimental para eventos del dataset.
+    """
+
+    if DATA is None or BUNDLE is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Modelo o dataset no cargado."
+        )
+
+    # Límites iniciales para controlar el coste computacional.
+    if req.days_remaining > 15:
+        raise HTTPException(
+            status_code=422,
+            detail="La integración experimental admite hasta 15 días."
+        )
+
+    # Recuperar evento y categoría desde la API existente.
+    row = get_snapshot(
+        req.event_id,
+        req.ticket_category_id,
+        req.days_remaining
+    )
+
+    original_stock = int(row["remaining_capacity"])
+
+    stock = (
+        original_stock
+        if req.remaining_capacity is None
+        else int(req.remaining_capacity)
+    )
+
+    # Mantener coherencia con la actualización de la API.
+    row = update_inventory(row, stock)
+
+    context = context_dict(row, original_stock)
+
+    if stock == 0:
+        return {
+            "status": "sold_out",
+            "message": "No quedan entradas disponibles.",
+            "context": context,
+            "model": req.model,
+            "recommendation": None
+        }
+
+    if stock > 1000:
+        raise HTTPException(
+            status_code=422,
+            detail="La integración experimental admite hasta 1000 entradas disponibles."
+        )
+
+    estado = row.to_dict()
+
+    try:
+        resultado = resolver(
+            estado=estado,
+            dias=req.days_remaining,
+            stock=stock,
+            modo=req.model,
+            forma_nb=forma_nb
+        )
+
+        recomendacion = resultado.recomendacion()
+
+    except (ValueError, KeyError, FileNotFoundError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No se pudo calcular la PDE: {error}"
+        ) from error
+
+    precio = float(
+        recomendacion["precio_recomendado_eur"]
+    )
+
+    ventas = float(
+        recomendacion["ventas_estimadas_siguiente_dia"]
+    )
+
+    ingresos_totales = float(
+        recomendacion["ingreso_total_esperado_eur"]
+    )
+
+    return {
+        "status": "ok",
+        "message": "Optimización PDE completada.",
+        "context": context,
+        "model": req.model,
+        "optimization": "stochastic_dynamic_programming",
+        "horizon_days": resultado.dias,
+        "uncertainty": {
+            "distribution": "negative_binomial",
+            "shape_parameter": forma_nb,
+            "calibrated": False
+        },
+        "recommendation": {
+            "price": precio,
+            "expected_sales_next_day": ventas,
+            "expected_revenue_next_day": precio * ventas,
+            "expected_total_revenue": ingresos_totales
+        },
+        "candidate_prices": [
+            float(p) for p in resultado.precios
+        ],
+        "caveat": (
+            "Resultados experimentales basados en datos "
+            "sintéticos. La incertidumbre no está calibrada "
+            "con datos reales y algunas variables históricas "
+            "permanecen constantes durante la optimización."
+        )
+    }
+
+
+@app.post("/api/v7/custom/pde/optimize")
+def optimize_custom_pde(
+    req: CustomPrediction,
+    forma_nb: float = Query(default=9.0, gt=0, le=100)
+):
+    """PDE experimental para eventos personalizados de STADIUM IQ."""
+
+    if DATA is None or BUNDLE is None:
+        raise HTTPException(503, "Modelo o dataset no cargado.")
+
+    if req.remaining_capacity > req.category_capacity:
+        raise HTTPException(422, "El inventario supera el aforo.")
+
+    if req.days_remaining > 15:
+        raise HTTPException(
+            422,
+            "La PDE experimental admite hasta 15 días."
+        )
+
+    if req.remaining_capacity > 1000:
+        raise HTTPException(
+            422,
+            "La PDE experimental admite hasta 1000 entradas disponibles."
+        )
+
+    # Crear el mismo perfil de referencia que utiliza el
+    # simulador personalizado existente.
+    row = custom_template(
+        req.sport_type,
+        req.ticket_category,
+        req.days_remaining
+    )
+
+    for field in variables_deporte(req.sport_type):
+        value = getattr(req, field)
+        if value is not None:
+            row[field] = value
+
+    row["event_id"] = "CUSTOM_SCENARIO"
+    row["ticket_category_id"] = "CUSTOM_CATEGORY"
+    row["category_capacity"] = req.category_capacity
+    row["total_capacity"] = req.category_capacity
+
+    reference_price = (
+        req.reference_price
+        if req.reference_price is not None
+        else req.current_price
+    )
+
+    row["base_price"] = reference_price
+    row["current_price"] = req.current_price
+    row["min_price"] = round(reference_price * 0.8, 4)
+    row["max_price"] = round(reference_price * 1.2, 4)
+
+    row["popularity_index"] = req.popularity_index
+    row["event_importance"] = req.event_importance
+
+    # No existe un historial de ventas del nuevo evento.
+    row["sales_last_period"] = 0
+
+    row = update_inventory(row, req.remaining_capacity)
+
+    if "sales_velocity" in row.index:
+        row["sales_velocity"] = 0
+
+    row["price_vs_base"] = (
+        req.current_price / reference_price - 1
+    )
+
+    if "discount_active" in row.index:
+        row["discount_active"] = int(
+            req.current_price < reference_price
+        )
+
+    context = context_dict(row)
+    context.update({
+        "is_custom": True,
+        "event_name": req.event_name,
+        "reference_price": float(reference_price)
+    })
+
+    if req.remaining_capacity == 0:
+        return {
+            "status": "sold_out",
+            "context": context,
+            "recommendation": None
+        }
+
+    try:
+        resultado = resolver(
+            estado=row.to_dict(),
+            dias=req.days_remaining,
+            stock=req.remaining_capacity,
+            modo=req.model,
+            forma_nb=forma_nb
+        )
+
+    except (ValueError, KeyError) as error:
+        raise HTTPException(
+            422,
+            f"No se pudo calcular la PDE: {error}"
+        ) from error
+
+    recomendacion = resultado.recomendacion()
+    precio = float(recomendacion["precio_recomendado_eur"])
+    ventas = float(
+        recomendacion["ventas_estimadas_siguiente_dia"]
+    )
+
+    return {
+        "status": "ok",
+        "model": req.model,
+        "optimization": "stochastic_dynamic_programming",
+        "context": context,
+        "horizon_days": resultado.dias,
+        "recommendation": {
+            "price": precio,
+            "expected_sales_next_day": ventas,
+            "expected_revenue_next_day": precio * ventas,
+            "expected_total_revenue": float(
+                recomendacion["ingreso_total_esperado_eur"]
+            )
+        },
+        "candidate_prices": [
+            float(p) for p in resultado.precios
+        ],
+        "uncertainty": {
+            "distribution": "negative_binomial",
+            "shape_parameter": forma_nb,
+            "calibrated": False
+        },
+        "caveat": (
+            "Escenario personalizado y experimental. "
+            "Los atributos no introducidos provienen de un "
+            "perfil sintético de referencia. Las ventas "
+            "anteriores se suponen iguales a cero y algunas "
+            "variables futuras permanecen constantes. "
+            "La dispersión no está calibrada con datos reales."
+        )
+    }
+
+
+# ============================================================
+# MONTE CARLO - VALIDACIÓN DE ESTRATEGIAS DE PRECIOS
+# ============================================================
+
+from simulacion_montecarlo_xgboost import simular
+
+
+@app.post("/api/v7/custom/montecarlo")
+def montecarlo_custom(
+    req: CustomPrediction,
+    replicas: int = Query(default=100, ge=10, le=500),
+    forma_nb: float = Query(default=9.0, gt=0, le=100)
+):
+    """
+    Compara tres estrategias de pricing:
+    1. Precio fijo.
+    2. XGBoost con optimización inmediata.
+    3. XGBoost + PDE.
+
+    Escenarios de demanda: 30 %, 60 % y 100 %.
+    """
+
+    if DATA is None or BUNDLE is None:
+        raise HTTPException(
+            503,
+            "Modelo o dataset no cargado."
+        )
+
+    if req.remaining_capacity > req.category_capacity:
+        raise HTTPException(
+            422,
+            "Las entradas disponibles superan el aforo."
+        )
+
+    if req.days_remaining > 15:
+        raise HTTPException(
+            422,
+            "Monte Carlo admite hasta 15 días en esta versión."
+        )
+
+    if req.remaining_capacity > 1000:
+        raise HTTPException(
+            422,
+            "Monte Carlo admite hasta 1000 entradas disponibles."
+        )
+
+    if req.remaining_capacity == 0:
+        return {
+            "status": "sold_out",
+            "message": "No quedan entradas disponibles.",
+            "scenarios": []
+        }
+
+    # Construcción del mismo escenario personalizado
+    # utilizado por XGBoost y la PDE.
+
+    row = custom_template(
+        req.sport_type,
+        req.ticket_category,
+        req.days_remaining
+    )
+
+    for field in variables_deporte(req.sport_type):
+        value = getattr(req, field)
+
+        if value is not None:
+            row[field] = value
+
+    row["event_id"] = "CUSTOM_SCENARIO"
+    row["ticket_category_id"] = "CUSTOM_CATEGORY"
+
+    row["category_capacity"] = req.category_capacity
+    row["total_capacity"] = req.category_capacity
+
+    reference_price = (
+        req.reference_price
+        if req.reference_price is not None
+        else req.current_price
+    )
+
+    row["base_price"] = reference_price
+    row["current_price"] = req.current_price
+
+    row["min_price"] = round(
+        reference_price * 0.8, 4
+    )
+
+    row["max_price"] = round(
+        reference_price * 1.2, 4
+    )
+
+    row["popularity_index"] = req.popularity_index
+    row["event_importance"] = req.event_importance
+
+    # Hipótesis para eventos sin historial.
+    row["sales_last_period"] = 0
+
+    row = update_inventory(
+        row,
+        req.remaining_capacity
+    )
+
+    if "sales_velocity" in row.index:
+        row["sales_velocity"] = 0
+
+    row["price_vs_base"] = (
+        req.current_price / reference_price - 1
+    )
+
+    if "discount_active" in row.index:
+        row["discount_active"] = int(
+            req.current_price < reference_price
+        )
+
+    # Resolver la PDE una sola vez.
+    # La misma política se evaluará bajo distintos
+    # escenarios de demanda.
+
+    try:
+        resultado = resolver(
+            estado=row.to_dict(),
+            dias=req.days_remaining,
+            stock=req.remaining_capacity,
+            modo=req.model,
+            forma_nb=forma_nb
+        )
+
+        escenarios = []
+
+        for factor in [0.3, 0.6, 1.0]:
+
+            resumen, _ = simular(
+                resultado,
+                replicas=replicas,
+                semilla=42,
+                factor_demanda=factor
+            )
+
+            escenarios.append({
+                "factor_demanda": factor,
+                "demanda_porcentaje": int(
+                    factor * 100
+                ),
+                "resultados": resumen.to_dict(
+                    orient="records"
+                )
+            })
+
+    except (ValueError, KeyError, FileNotFoundError) as error:
+        raise HTTPException(
+            422,
+            f"No se pudo ejecutar Monte Carlo: {error}"
+        ) from error
+
+    return {
+        "status": "ok",
+        "event_name": req.event_name,
+        "sport": req.sport_type,
+        "ticket_category": req.ticket_category,
+        "days_remaining": req.days_remaining,
+        "remaining_capacity": req.remaining_capacity,
+        "model": req.model,
+        "replicas": replicas,
+        "distribution": "negative_binomial",
+        "forma_nb": forma_nb,
+        "pde_recommended_price": float(
+            resultado.recomendacion()[
+                "precio_recomendado_eur"
+            ]
+        ),
+        "scenarios": escenarios,
+        "caveat": (
+            "Evaluación experimental con datos sintéticos. "
+            "Las simulaciones utilizan demanda condicionada "
+            "a XGBoost y no constituyen validación externa. "
+            "La dispersión de la binomial negativa no está "
+            "calibrada. Las estrategias comparadas utilizan "
+            "la misma rejilla de cinco precios dentro de "
+            "Monte Carlo, distinta de la búsqueda más amplia "
+            "del optimizador inmediato de la interfaz."
+        )
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -868,3 +1325,5 @@ if __name__ == "__main__":
     uvicorn.run(
         app, host="127.0.0.1", port=8001
     )
+
+
