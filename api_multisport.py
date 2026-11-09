@@ -269,7 +269,7 @@ class CustomPrediction(BaseModel):
     sport_type: Literal["football", "basketball", "tennis", "running"]
     ticket_category: str = Field(min_length=1)
     days_remaining: int = Field(ge=1, le=30)
-    model: Literal["rate", "direct"] = "rate"
+    model: Literal["rate"] = "rate"
     category_capacity: int = Field(ge=1, le=100000)
     remaining_capacity: int = Field(ge=0, le=100000)
     current_price: float = Field(gt=0, le=10000)
@@ -280,11 +280,30 @@ class CustomPrediction(BaseModel):
     derby_rivalry_index: float | None = Field(default=None, ge=0, le=1)
     league_position_home: int | None = Field(default=None, ge=1, le=30)
     league_position_away: int | None = Field(default=None, ge=1, le=30)
+    recent_form_home_away: float | None = Field(default=None, ge=0, le=1)
+    league_stakes: float | None = Field(default=None, ge=0, le=1)
+    star_players_available: int | None = Field(default=None, ge=0, le=1)
     team_win_percentage: float | None = Field(default=None, ge=0, le=1)
+    standings_difference: int | None = Field(default=None, ge=-30, le=30)
+    playoff_phase: Literal[
+        "regular", "play_in", "quarterfinal", "semifinal", "final"
+    ] | None = None
+    back_to_back_game: int | None = Field(default=None, ge=0, le=1)
+    rivalry_index: float | None = Field(default=None, ge=0, le=1)
     player_ranking: int | None = Field(default=None, ge=1, le=500)
     tournament_round: Literal["R32", "R16", "QF", "SF", "F"] | None = None
+    players_confirmed: int | None = Field(default=None, ge=0, le=1)
+    singles_doubles: Literal["singles", "doubles"] | None = None
+    tournament_category: Literal[
+        "ATP_250", "ATP_500", "Masters", "Grand_Slam"
+    ] | None = None
+    session_schedule: Literal["day", "evening"] | None = None
     race_distance_km: float | None = Field(default=None, gt=0, le=100)
     elevation_gain_m: float | None = Field(default=None, ge=0, le=5000)
+    route_difficulty: float | None = Field(default=None, ge=0, le=1)
+    registration_deadline_days: int | None = Field(default=None, ge=0, le=365)
+    registration_tier: Literal["early", "standard", "late"] | None = None
+    participant_services: int | None = Field(default=None, ge=0, le=1)
 
 
 class Prediction(BaseModel):
@@ -768,6 +787,11 @@ def safe_optional_number(row, field):
     return None if pd.isna(value) else float(value)
 
 
+def safe_optional_text(row, field, default=None):
+    value = row.get(field)
+    return default if pd.isna(value) else str(value)
+
+
 @app.get("/api/v7/custom/defaults")
 def custom_defaults(
     sport_type: Literal["football", "basketball", "tennis", "running"],
@@ -785,11 +809,26 @@ def custom_defaults(
         "derby_rivalry_index": safe_optional_number(row, "derby_rivalry_index"),
         "league_position_home": safe_optional_number(row, "league_position_home"),
         "league_position_away": safe_optional_number(row, "league_position_away"),
+        "recent_form_home_away": safe_optional_number(row, "recent_form_home_away"),
+        "league_stakes": safe_optional_number(row, "league_stakes"),
+        "star_players_available": safe_optional_number(row, "star_players_available"),
         "team_win_percentage": safe_optional_number(row, "team_win_percentage"),
+        "standings_difference": safe_optional_number(row, "standings_difference"),
+        "playoff_phase": safe_optional_text(row, "playoff_phase", "regular"),
+        "back_to_back_game": safe_optional_number(row, "back_to_back_game"),
+        "rivalry_index": safe_optional_number(row, "rivalry_index"),
         "player_ranking": safe_optional_number(row, "player_ranking"),
         "tournament_round": str(row.get("tournament_round")) if pd.notna(row.get("tournament_round")) else "QF",
+        "players_confirmed": safe_optional_number(row, "players_confirmed"),
+        "singles_doubles": safe_optional_text(row, "singles_doubles", "singles"),
+        "tournament_category": safe_optional_text(row, "tournament_category", "ATP_500"),
+        "session_schedule": safe_optional_text(row, "session_schedule", "evening"),
         "race_distance_km": safe_optional_number(row, "race_distance_km"),
         "elevation_gain_m": safe_optional_number(row, "elevation_gain_m"),
+        "route_difficulty": safe_optional_text(row, "route_difficulty", "0.5"),
+        "registration_deadline_days": safe_optional_number(row, "registration_deadline_days"),
+        "registration_tier": safe_optional_text(row, "registration_tier", "standard"),
+        "participant_services": safe_optional_number(row, "participant_services"),
     }
 
 
@@ -926,10 +965,10 @@ def optimize_pde(
             "recommendation": None
         }
 
-    if stock > 1000:
+    if stock > 100000:
         raise HTTPException(
             status_code=422,
-            detail="La integración experimental admite hasta 1000 entradas disponibles."
+            detail="La integración experimental admite hasta 100000 entradas disponibles."
         )
 
     estado = row.to_dict()
@@ -1012,10 +1051,10 @@ def optimize_custom_pde(
             "La PDE experimental admite hasta 15 días."
         )
 
-    if req.remaining_capacity > 1000:
+    if req.remaining_capacity > 100000:
         raise HTTPException(
             422,
-            "La PDE experimental admite hasta 1000 entradas disponibles."
+            "La PDE experimental admite hasta 100000 entradas disponibles."
         )
 
     # Crear el mismo perfil de referencia que utiliza el
@@ -1325,5 +1364,3 @@ if __name__ == "__main__":
     uvicorn.run(
         app, host="127.0.0.1", port=8001
     )
-
-

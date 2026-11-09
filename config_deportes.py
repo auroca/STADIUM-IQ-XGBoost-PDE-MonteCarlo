@@ -8,12 +8,19 @@ DEPORTES = {
             "derby_rivalry_index",
             "league_position_home",
             "league_position_away",
+            "recent_form_home_away",
+            "league_stakes",
+            "star_players_available",
         ),
     },
     "basketball": {
         "nombre": "Baloncesto",
         "variables": (
             "team_win_percentage",
+            "standings_difference",
+            "playoff_phase",
+            "back_to_back_game",
+            "rivalry_index",
         ),
     },
     "tennis": {
@@ -21,6 +28,10 @@ DEPORTES = {
         "variables": (
             "player_ranking",
             "tournament_round",
+            "players_confirmed",
+            "singles_doubles",
+            "tournament_category",
+            "session_schedule",
         ),
     },
     "running": {
@@ -28,6 +39,10 @@ DEPORTES = {
         "variables": (
             "race_distance_km",
             "elevation_gain_m",
+            "route_difficulty",
+            "registration_deadline_days",
+            "registration_tier",
+            "participant_services",
         ),
     },
 }

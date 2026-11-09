@@ -24,23 +24,30 @@ ARTIFACT = ROOT / "multisport_model.joblib"
 REPORT = ROOT / "multisport_model_metrics.json"
 
 NUMERIC = [
-    "days_remaining", "popularity_index", "event_importance",
+    "days_remaining", "sales_window_days", "prediction_horizon_days",
+    "day_of_week", "popularity_index", "event_importance",
     "weather_temperature", "rain_probability", "is_televised",
-    "is_holiday_period", "competing_events", "marketing_campaign",
+    "is_holiday_period", "is_holiday", "competing_events", "marketing_campaign",
     "event_month", "event_day_of_week", "is_weekend",
     "category_capacity", "base_price", "is_premium_experience",
     "hospitality_included", "total_capacity", "remaining_capacity",
     "cumulative_sales", "sales_last_period", "occupancy_rate",
-    "current_price", "price_vs_base",
-    "league_position_home", "league_position_away",
-    "derby_rivalry_index", "team_win_percentage", "player_ranking",
-    "race_distance_km", "elevation_gain_m",
+    "current_price", "candidate_price", "previous_price", "price_change_pct",
+    "competitor_price", "price_vs_base", "discount_active",
+    "league_position_home", "league_position_away", "recent_form_home_away",
+    "derby_rivalry_index", "league_stakes", "star_players_available",
+    "team_win_percentage", "standings_difference", "back_to_back_game",
+    "rivalry_index", "player_ranking", "players_confirmed",
+    "race_distance_km", "elevation_gain_m", "registration_deadline_days",
+    "participant_services", "route_difficulty",
 ]
 
 CATEGORICAL = [
     "sport_type", "event_format", "competition_level",
     "competition_phase", "venue_type", "tournament_round",
-    "route_difficulty", "ticket_category", "sales_period",
+    "playoff_phase", "ticket_category", "sales_period",
+    "singles_doubles", "tournament_category", "session_schedule",
+    "registration_tier",
 ]
 
 TARGET = "sales_next_period"

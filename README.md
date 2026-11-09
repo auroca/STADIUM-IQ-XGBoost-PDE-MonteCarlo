@@ -56,9 +56,9 @@ El sistema utiliza XGBoost para predecir ventas y analizar diferentes precios ca
 
 | Dataset | Modelo | Evaluación |
 |:---:|:---:|:---:|
-| **120 eventos** | **XGBoost** | **24 eventos de prueba** |
+| **1.000 eventos** | **XGBoost** | **200 eventos de prueba** |
 | **4 deportes** | Predicción de demanda | **48 categorías** |
-| **7.200 registros** | Optimización de ingresos | **20 repeticiones** |
+| **60.000 registros** | Optimización de ingresos | **20 repeticiones** |
 
 ### Deportes compatibles
 
@@ -259,6 +259,35 @@ La evaluación utiliza factores aleatorios compartidos para mejorar la comparabi
 Código:
 
 `v8_2_validacion.py`
+
+### Variables multideporte incorporadas
+
+El dataset multideporte incluye las variables comunes del proceso de venta y
+las variables específicas descritas en el anexo de la memoria:
+
+- Precio: `previous_price`, `price_change_pct` y `competitor_price`.
+- Calendario y venta: `sales_window_days`, `day_of_week` e `is_holiday`.
+- Fútbol: forma reciente, importancia clasificatoria y disponibilidad de
+  jugadores destacados.
+- Baloncesto: diferencia clasificatoria, fase de playoffs, partidos
+  consecutivos y rivalidad.
+- Tenis: jugadores confirmados, modalidad, categoría del torneo y horario.
+- Running: dificultad y desnivel del recorrido, plazo y tramo de inscripción,
+  y servicios incluidos.
+
+Estas columnas se generan en `generar_dataset.py`, se codifican según su tipo
+en el entrenamiento y se incluyen en `multisport_model.joblib`. La interfaz
+multideporte permite introducir las variables específicas de cada deporte y
+las envía al mismo escenario usado por XGBoost y la PDE.
+
+### Optimización PDE escalable
+
+La interfaz utiliza la predicción de **tasa de venta** como modelo principal.
+La PDE experimental calcula la política sobre una rejilla de hasta 1.000
+niveles de inventario y aproxima los estados intermedios por interpolación.
+Por ello admite categorías de hasta 100.000 entradas sin crear una matriz con
+un estado por entrada. El horizonte PDE visible continúa limitado a 15 días
+para conservar tiempos de respuesta adecuados.
 
 ---
 

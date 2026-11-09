@@ -54,12 +54,37 @@ const emptyCustom = () => ({
   derby_rivalry_index: "",
   league_position_home: "",
   league_position_away: "",
+  recent_form_home_away: "",
+  league_stakes: "",
+  star_players_available: "",
   team_win_percentage: "",
+  standings_difference: "",
+  playoff_phase: "",
+  back_to_back_game: "",
+  rivalry_index: "",
   player_ranking: "",
   tournament_round: "",
+  players_confirmed: "",
+  singles_doubles: "",
+  tournament_category: "",
+  session_schedule: "",
   race_distance_km: "",
-  elevation_gain_m: ""
+  elevation_gain_m: "",
+  route_difficulty: "",
+  registration_deadline_days: "",
+  registration_tier: "",
+  participant_services: ""
 });
+
+const CUSTOM_CATEGORICAL_FIELDS = [
+  "tournament_round",
+  "playoff_phase",
+  "singles_doubles",
+  "tournament_category",
+  "session_schedule",
+  "registration_tier",
+  "route_difficulty"
+];
 
 function Icon({ name, size = 20 }) {
   return (
@@ -99,13 +124,12 @@ export default function Multisport() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [advanced, setAdvanced] = useState(false);
   const [customCategories, setCustomCategories] = useState([]);
   const [customCategory, setCustomCategory] = useState("");
   const [eventName, setEventName] = useState("");
   const [custom, setCustom] = useState(emptyCustom);
   const [eventMode, setEventMode] = useState("new");
-  const [setupStep, setSetupStep] = useState(1);
+  const [setupStep, setSetupStep] = useState(0);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [savedEvents, setSavedEvents] = useState([]);
@@ -136,7 +160,7 @@ export default function Multisport() {
     setDays("");
     setSelectedEventId("");
     setEventMode("new");
-    setSetupStep(1);
+    setSetupStep(0);
     setResult(null);
     setPdeResult(null);
     setPdeError("");
@@ -350,11 +374,11 @@ export default function Multisport() {
 
     if (
       payload.days_remaining > 15 ||
-      payload.remaining_capacity > 1000
+      payload.remaining_capacity > 100000
     ) {
       setPdeError(
         "La PDE experimental admite hasta 15 días y " +
-        "1.000 entradas disponibles. " +
+        "100.000 entradas disponibles. " +
         "La recomendación inmediata sigue disponible."
       );
       return;
@@ -506,7 +530,7 @@ export default function Multisport() {
         ...Object.fromEntries(
           Object.entries(custom).map(([key, value]) => [
             key,
-            key === "tournament_round"
+            CUSTOM_CATEGORICAL_FIELDS.includes(key)
               ? (value === "" ? null : value)
               : (
                   value === "" || value == null
@@ -523,12 +547,12 @@ export default function Multisport() {
         payload
       );
 
-      setResult(response.data);
-
       // PDE complementaria.
       if (response.data.status === "ok") {
         await calculatePDE(payload);
       }
+
+      setResult(response.data);
 
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -657,6 +681,43 @@ export default function Multisport() {
               </select>
             )}
 
+            {eventMode === "new" && setupStep === 0 && (
+              <div className="ms-step ms-sport-picker">
+                <div className="ms-step-heading">
+                  <span className="ms-step-number">01</span>
+                  <div>
+                    <strong>Elige el deporte</strong>
+                    <small>
+                      Después te mostraremos solo los datos que necesitas.
+                    </small>
+                  </div>
+                </div>
+
+                <div className="ms-sports">
+                  {SPORTS.map(([id, name, icon]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="ms-sport"
+                      onClick={() => {
+                        setSport(id);
+                        setCustomCategory("");
+                        setCustom(emptyCustom());
+                        setError("");
+                        setResult(null);
+                        setPdeResult(null);
+                        setPdeError("");
+                        setSetupStep(1);
+                      }}
+                    >
+                      <Icon name={icon} size={26} />
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {(eventMode === "new" || currentSavedEvent) &&
               setupStep === 1 && (
 
@@ -674,35 +735,7 @@ export default function Multisport() {
                   </div>
                 </div>
 
-                {eventMode === "new" ? (
-
-                  <div className="ms-sports">
-                    {SPORTS.map(([id, name, icon]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        className={
-                          sport === id
-                            ? "ms-sport selected"
-                            : "ms-sport"
-                        }
-                        onClick={() => {
-                          setSport(id);
-                          setCustomCategory("");
-                          setCustom(emptyCustom());
-                          setError("");
-                          setResult(null);
-                          setPdeResult(null);
-                          setPdeError("");
-                        }}
-                      >
-                        <Icon name={icon} size={26} />
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-
-                ) : currentSavedEvent ? (
+                {eventMode !== "new" && currentSavedEvent ? (
 
                   <div className="ms-locked-sport">
                     <Icon
@@ -726,14 +759,14 @@ export default function Multisport() {
                     </small>
                   </div>
 
-                ) : (
+                ) : eventMode !== "new" ? (
 
                   <div className="ms-event-select-hint">
                     Selecciona un evento guardado para
                     cargar su deporte.
                   </div>
 
-                )}
+                ) : null}
 
                 <div className="ms-divider" />
 
@@ -759,6 +792,7 @@ export default function Multisport() {
                         "Ej. Final del torneo de mi ciudad"
                       }
                     />
+
                   </>
                 )}
 
@@ -1112,6 +1146,53 @@ export default function Multisport() {
                           )
                         }
                       />
+
+                      <label className="ms-label">
+                        Forma reciente del equipo (0–100 %)
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        placeholder="Ej. 0,70"
+                        value={custom.recent_form_home_away ?? ""}
+                        onChange={e =>
+                          updateCustom("recent_form_home_away", e.target.value)
+                        }
+                      />
+
+                      <label className="ms-label">
+                        Importancia clasificatoria (0–100 %)
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        placeholder="Ej. 0,80"
+                        value={custom.league_stakes ?? ""}
+                        onChange={e =>
+                          updateCustom("league_stakes", e.target.value)
+                        }
+                      />
+
+                      <label className="ms-label">
+                        Jugadores destacados disponibles
+                      </label>
+                      <select
+                        required
+                        value={String(custom.star_players_available ?? "")}
+                        onChange={e =>
+                          updateCustom("star_players_available", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona una opción</option>
+                        <option value="1">Sí</option>
+                        <option value="0">No</option>
+                      </select>
                     </>
                   )}
 
@@ -1140,6 +1221,64 @@ export default function Multisport() {
                         <option value="0.5">50 %</option>
                         <option value="0.75">75 %</option>
                       </select>
+
+                      <label className="ms-label">
+                        Diferencia en la clasificación
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="-30"
+                        max="30"
+                        placeholder="Ej. 4"
+                        value={custom.standings_difference ?? ""}
+                        onChange={e =>
+                          updateCustom("standings_difference", e.target.value)
+                        }
+                      />
+
+                      <label className="ms-label">Fase de playoffs</label>
+                      <select
+                        required
+                        value={custom.playoff_phase ?? ""}
+                        onChange={e =>
+                          updateCustom("playoff_phase", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona la fase</option>
+                        <option value="regular">Temporada regular</option>
+                        <option value="play_in">Play-in</option>
+                        <option value="quarterfinal">Cuartos</option>
+                        <option value="semifinal">Semifinal</option>
+                        <option value="final">Final</option>
+                      </select>
+
+                      <label className="ms-label">Partido consecutivo</label>
+                      <select
+                        required
+                        value={String(custom.back_to_back_game ?? "")}
+                        onChange={e =>
+                          updateCustom("back_to_back_game", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona una opción</option>
+                        <option value="0">No</option>
+                        <option value="1">Sí</option>
+                      </select>
+
+                      <label className="ms-label">Rivalidad (0–100 %)</label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        placeholder="Ej. 0,60"
+                        value={custom.rivalry_index ?? ""}
+                        onChange={e =>
+                          updateCustom("rivalry_index", e.target.value)
+                        }
+                      />
                     </>
                   )}
 
@@ -1200,6 +1339,60 @@ export default function Multisport() {
                         <option value="F">
                           Final
                         </option>
+                      </select>
+
+                      <label className="ms-label">Jugadores confirmados</label>
+                      <select
+                        required
+                        value={String(custom.players_confirmed ?? "")}
+                        onChange={e =>
+                          updateCustom("players_confirmed", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona una opción</option>
+                        <option value="1">Sí</option>
+                        <option value="0">No</option>
+                      </select>
+
+                      <label className="ms-label">Modalidad</label>
+                      <select
+                        required
+                        value={custom.singles_doubles ?? ""}
+                        onChange={e =>
+                          updateCustom("singles_doubles", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona la modalidad</option>
+                        <option value="singles">Individual</option>
+                        <option value="doubles">Dobles</option>
+                      </select>
+
+                      <label className="ms-label">Categoría del torneo</label>
+                      <select
+                        required
+                        value={custom.tournament_category ?? ""}
+                        onChange={e =>
+                          updateCustom("tournament_category", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona la categoría</option>
+                        <option value="ATP_250">ATP 250</option>
+                        <option value="ATP_500">ATP 500</option>
+                        <option value="Masters">Masters</option>
+                        <option value="Grand_Slam">Grand Slam</option>
+                      </select>
+
+                      <label className="ms-label">Horario de la sesión</label>
+                      <select
+                        required
+                        value={custom.session_schedule ?? ""}
+                        onChange={e =>
+                          updateCustom("session_schedule", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona el horario</option>
+                        <option value="day">Día</option>
+                        <option value="evening">Tarde/noche</option>
                       </select>
                     </>
                   )}
@@ -1277,6 +1470,37 @@ export default function Multisport() {
                           )
                         }
                       />
+
+                      <label className="ms-label">
+                        Dificultad del recorrido (0–100 %)
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        placeholder="Ej. 0,50"
+                        value={custom.route_difficulty ?? ""}
+                        onChange={e =>
+                          updateCustom("route_difficulty", e.target.value)
+                        }
+                      />
+
+                      <label className="ms-label">
+                        Servicios incluidos
+                      </label>
+                      <select
+                        required
+                        value={String(custom.participant_services ?? "")}
+                        onChange={e =>
+                          updateCustom("participant_services", e.target.value)
+                        }
+                      >
+                        <option value="">Selecciona una opción</option>
+                        <option value="1">Sí</option>
+                        <option value="0">No</option>
+                      </select>
                     </>
                   )}
 
@@ -1303,62 +1527,6 @@ export default function Multisport() {
 
               <>
                 <div className="ms-divider" />
-
-                <button
-                  className="ms-advanced"
-                  type="button"
-                  onClick={() =>
-                    setAdvanced(!advanced)
-                  }
-                >
-                  <Icon
-                    name="settings"
-                    size={18}
-                  />
-
-                  Más opciones
-
-                  <Icon
-                    name={
-                      advanced
-                        ? "expand_less"
-                        : "expand_more"
-                    }
-                  />
-                </button>
-
-                {advanced && (
-                  <div className="ms-advanced-body">
-
-                    <label className="ms-label">
-                      Modelo XGBoost
-                    </label>
-
-                    <select
-                      value={model}
-                      onChange={e => {
-                        setModel(e.target.value);
-                        setResult(null);
-                        setPdeResult(null);
-                        setPdeError("");
-                      }}
-                    >
-                      <option value="rate">
-                        Tasa de venta
-                      </option>
-
-                      <option value="direct">
-                        Ventas directas
-                      </option>
-                    </select>
-
-                    <p>
-                      Ambos modelos se entrenaron con
-                      datos sintéticos. Puedes comparar
-                      sus recomendaciones.
-                    </p>
-                  </div>
-                )}
 
                 <button
                   className="ms-submit"
@@ -1511,12 +1679,16 @@ export default function Multisport() {
           {ok && (
             <>
 
-              {/* XGBOOST INMEDIATO */}
+              {/* REFERENCIA INMEDIATA DE XGBOOST */}
 
-              <div className="ms-panel ms-hero">
+              <div className={`ms-panel ms-hero ms-secondary-result${
+                pdeResult?.status === "ok"
+                  ? " ms-horizon-available"
+                  : ""
+              }`}>
 
                 <div className="ms-eyebrow">
-                  RECOMENDACIÓN DEL MODELO
+                  REFERENCIA PARA MAÑANA · XGBOOST
                 </div>
 
                 <p>
@@ -1598,7 +1770,11 @@ export default function Multisport() {
 
               </div>
 
-              <div className="ms-compare">
+              <div className={`ms-compare${
+                pdeResult?.status === "ok"
+                  ? " ms-horizon-available"
+                  : ""
+              }`}>
 
                 <Card
                   title="Mantener el precio"
@@ -1635,8 +1811,8 @@ export default function Multisport() {
                   />
 
                   <p>
-                    Calculando la recomendación con
-                    Programación Dinámica Estocástica...
+                    Calculando el plan de precios para los días
+                    restantes...
                   </p>
                 </div>
               )}
@@ -1652,28 +1828,27 @@ export default function Multisport() {
                   />
 
                   <h2>
-                    PDE no disponible para este escenario
+                    Plan para varios días no disponible
                   </h2>
 
                   <p>{pdeError}</p>
 
                   <p className="ms-muted">
-                    La recomendación inmediata de XGBoost
-                    sigue estando disponible.
+                    La recomendación para mañana sigue estando
+                    disponible.
                   </p>
                 </div>
               )}
 
               {pdeResult?.status === "ok" && (
-                <div className="ms-panel ms-hero">
+                <div className="ms-panel ms-hero ms-primary-result">
 
                   <div className="ms-eyebrow">
-                    OPTIMIZACIÓN DEL HORIZONTE COMPLETO · PDE
+                    RECOMENDACIÓN PRINCIPAL · TODO EL PERÍODO
                   </div>
 
                   <h2>
-                    Precio recomendado considerando
-                    los días restantes
+                    Precio recomendado para aplicar hoy
                   </h2>
 
                   <div className="ms-big-price">
@@ -1683,17 +1858,17 @@ export default function Multisport() {
                   </div>
 
                   <p className="ms-muted">
-                    Recomendación para hoy, considerando{" "}
+                    Este precio busca maximizar los ingresos
+                    durante los{" "}
                     {pdeResult.horizon_days} días
-                    de venta.
+                    restantes. Se volverá a calcular cuando
+                    cambien las ventas o el inventario.
                   </p>
 
                   <div className="ms-compare">
 
                     <Card
-                      title={
-                        "Ventas previstas el siguiente día"
-                      }
+                      title="Ventas previstas mañana"
                       value={fmt(
                         pdeResult.recommendation
                           .expected_sales_next_day,
@@ -1705,9 +1880,7 @@ export default function Multisport() {
                     />
 
                     <Card
-                      title={
-                        "Ingresos previstos el siguiente día"
-                      }
+                      title="Ingresos previstos mañana"
                       value={euro(
                         pdeResult.recommendation
                           .expected_revenue_next_day
@@ -1715,9 +1888,7 @@ export default function Multisport() {
                     />
 
                     <Card
-                      title={
-                        "Ingresos totales esperados"
-                      }
+                      title="Ingresos estimados del período"
                       value={euro(
                         pdeResult.recommendation
                           .expected_total_revenue
@@ -1739,26 +1910,18 @@ export default function Multisport() {
                     />
 
                     <span>
-                      XGBoost estima las ventas y la PDE
-                      optimiza los ingresos esperados
-                      hasta el evento. No compares
-                      directamente los ingresos
-                      acumulados con los ingresos
-                      diarios de XGBoost.
+                      Esta es la recomendación principal: busca
+                      maximizar los ingresos durante todo el período
+                      restante. El precio para mañana se muestra como
+                      referencia y puede ser diferente.
                     </span>
 
                   </div>
 
                   <p className="ms-muted">
-                    Prototipo con datos sintéticos.
-                    La dispersión de demanda
-                    (binomial negativa, r=9)
-                    no está calibrada con datos reales.
-                    La PDE evalúa cinco precios y el
-                    optimizador inmediato una rejilla
-                    más amplia; las estrategias no
-                    utilizan exactamente el mismo
-                    conjunto de precios.
+                    XGBoost estima las ventas para cada precio y la
+                    optimización calcula el mejor plan para todo el
+                    período. Se utilizan datos sintéticos.
                   </p>
 
                 </div>
@@ -1766,7 +1929,11 @@ export default function Multisport() {
 
               {/* DIFERENCIA DE INGRESOS INMEDIATOS */}
 
-              <div className="ms-panel ms-difference">
+              <div className={`ms-panel ms-difference${
+                pdeResult?.status === "ok"
+                  ? " ms-horizon-available"
+                  : ""
+              }`}>
 
                 <Icon
                   name="insights"
@@ -1789,7 +1956,11 @@ export default function Multisport() {
 
               {/* GRÁFICO ORIGINAL DE XGBOOST */}
 
-              <div className="ms-panel ms-chart">
+              <div className={`ms-panel ms-chart${
+                pdeResult?.status === "ok"
+                  ? " ms-horizon-available"
+                  : ""
+              }`}>
 
                 <div className="ms-chart-heading">
 
@@ -1935,7 +2106,11 @@ export default function Multisport() {
 
               {/* EXPLICACIÓN ORIGINAL DEL MODELO */}
 
-              <details className="ms-panel ms-details">
+              <details className={`ms-panel ms-details${
+                pdeResult?.status === "ok"
+                  ? " ms-horizon-available"
+                  : ""
+              }`}>
 
                 <summary>
                   <Icon
@@ -1955,9 +2130,7 @@ export default function Multisport() {
                 <p>
                   Modelo utilizado:{" "}
                   <strong>
-                    {result.model === "rate"
-                      ? "Tasa de ventas"
-                      : "Demanda directa"}
+                    Tasa de ventas
                   </strong>
                 </p>
 

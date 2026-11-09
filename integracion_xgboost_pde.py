@@ -99,6 +99,8 @@ class ResultadoIntegracion:
     estado: dict
     modo: str
     forma_nb: float
+    niveles_stock: np.ndarray
+    stock_inicial: int
 
     @property
     def dias(self):
@@ -106,33 +108,39 @@ class ResultadoIntegracion:
 
     @property
     def stock(self):
-        return self.politica.shape[1] - 1
+        return self.stock_inicial
+
+    def indice_stock(self, stock: float) -> int:
+        if stock < 0 or stock > self.stock_inicial:
+            raise ValueError('Inventario fuera del estado calculado')
+        return int(np.abs(self.niveles_stock - stock).argmin())
 
     def recomendacion(self):
         d, s = self.dias, self.stock
-        j = int(self.politica[d, s])
+        si = self.indice_stock(s)
+        j = int(self.politica[d, si])
         return {
             'precio_recomendado_eur': float(self.precios[j]),
-            'ventas_estimadas_siguiente_dia': float(self.probabilidades[d, s, j] * s),
-            'ingreso_total_esperado_eur': float(self.valores[d, s]),
+            'ventas_estimadas_siguiente_dia': float(self.probabilidades[d, si, j] * s),
+            'ingreso_total_esperado_eur': float(self.valores[d, si]),
         }
 
 
-def calcular_probabilidades(estado: dict, dias: int, stock: int,
+def calcular_probabilidades(estado: dict, dias: int, niveles_stock: np.ndarray,
                             precios: np.ndarray, modo: str = 'rate') -> np.ndarray:
     paquete = cargar_xgboost()
     if modo not in paquete['models']:
         raise ValueError('Modo de XGBoost desconocido')
-    if stock > int(estado['category_capacity']) or dias < 1 or stock < 1:
+    if dias < 1 or len(niveles_stock) < 2:
         raise ValueError('Días/inventario fuera del rango permitido')
     n_precios = len(precios)
-    tasas = np.zeros((dias+1, stock+1, n_precios), dtype=float)
+    tasas = np.zeros((dias+1, len(niveles_stock), n_precios), dtype=float)
     capacidad, base = float(estado['category_capacity']), float(estado['base_price'])
     if not (base > 0 and capacidad > 0):
         raise ValueError('Capacidad o precio base inválidos')
     for d in range(1, dias + 1):
-        stocks = np.repeat(np.arange(1, stock+1), n_precios)
-        ps = np.tile(precios, stock)
+        stocks = np.repeat(niveles_stock[1:], n_precios)
+        ps = np.tile(precios, len(niveles_stock) - 1)
         df = pd.DataFrame([estado] * len(ps))
         for col in NUMERIC:
             if col not in df.columns:
@@ -154,47 +162,54 @@ def calcular_probabilidades(estado: dict, dias: int, stock: int,
         ventas = np.asarray(predict_sales(paquete['models'][modo], x, stocks, modo))
         if not np.isfinite(ventas).all():
             raise ValueError('Predicción no finita de XGBoost')
-        tasas[d, 1:, :] = np.clip(ventas/stocks, 0, 1).reshape(stock, n_precios)
+        tasas[d, 1:, :] = np.clip(ventas/stocks, 0, 1).reshape(len(niveles_stock) - 1, n_precios)
     return tasas
 
 
 def resolver(estado: dict, dias: int | None = None, stock: int | None = None,
-             modo: str = 'rate', forma_nb: float = 9.0) -> ResultadoIntegracion:
+             modo: str = 'rate', forma_nb: float = 9.0,
+             max_niveles_stock: int = 1001) -> ResultadoIntegracion:
     if not np.isfinite(forma_nb) or forma_nb <= 0:
         raise ValueError('forma_nb debe ser positiva')
     dias = int(dias if dias is not None else estado['days_remaining'])
     stock = int(stock if stock is not None else estado['remaining_capacity'])
+    if stock < 1 or stock > int(estado['category_capacity']):
+        raise ValueError('Inventario fuera del rango de la categoría')
+    if max_niveles_stock < 2:
+        raise ValueError('max_niveles_stock debe ser al menos 2')
+    n_niveles = min(stock, max_niveles_stock - 1)
+    niveles_stock = np.unique(np.rint(np.linspace(0, stock, n_niveles + 1)).astype(int))
     precios = precios_candidatos(estado)
-    tasas = calcular_probabilidades(estado, dias, stock, precios, modo)
+    tasas = calcular_probabilidades(estado, dias, niveles_stock, precios, modo)
     medias = np.zeros_like(tasas)
-    stocks = np.arange(1, stock+1, dtype=float)[:, None]
+    stocks = niveles_stock[1:].astype(float)[:, None]
     for d in range(1, dias+1):
         medias[d, 1:, :] = inferir_medias_latentes(tasas[d, 1:, :] * stocks, stocks, forma_nb)
 
-    v = np.zeros((dias+1, stock+1), dtype=float)
-    pi = np.zeros((dias+1, stock+1), dtype=np.int32)
-    for d in range(1, dias+1):
-        for s in range(1, stock+1):
-            k = np.arange(s)
+    v = np.zeros((dias+1, len(niveles_stock)), dtype=float)
+    pi = np.zeros((dias+1, len(niveles_stock)), dtype=np.int32)
+    for d in range(1, dias + 1):
+        for si, s in enumerate(niveles_stock[1:], start=1):
             alternativas = np.empty(len(precios))
             for j, precio in enumerate(precios):
-                mu = float(medias[d, s, j])
-                p = forma_nb / (forma_nb + mu)
-                # Para k<s, ventas exactamente k. Para k=s, demanda >= s.
-                pmf = np.empty(s+1)
-                pmf[:s] = nbinom.pmf(k, forma_nb, p)
-                pmf[s] = nbinom.sf(s-1, forma_nb, p)
-                alternativas[j] = float(np.dot(pmf, precio*np.arange(s+1) + v[d-1, s-np.arange(s+1)]))
+                mu = float(medias[d, si, j])
+                ventas = float(media_ventas_limitadas(mu, s, forma_nb))
+                siguiente = max(0.0, s - ventas)
+                futuro = float(np.interp(siguiente, niveles_stock, v[d-1]))
+                alternativas[j] = precio * ventas + futuro
             mejor = int(np.argmax(alternativas))
-            pi[d, s], v[d, s] = mejor, alternativas[mejor]
-    return ResultadoIntegracion(pi, v, tasas, medias, precios, estado, modo, forma_nb)
+            pi[d, si], v[d, si] = mejor, alternativas[mejor]
+    return ResultadoIntegracion(
+        pi, v, tasas, medias, precios, estado, modo, forma_nb,
+        niveles_stock, stock
+    )
 
 
 def tabla_politica(resultado: ResultadoIntegracion) -> pd.DataFrame:
     filas = []
     for d in range(1, resultado.dias+1):
-        for s in range(1, resultado.stock+1):
-            j = int(resultado.politica[d, s])
+        for si, s in enumerate(resultado.niveles_stock[1:], start=1):
+            j = int(resultado.politica[d, si])
             filas.append({
                 'dias_restantes': d,
                 'inventario_restante': s,

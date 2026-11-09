@@ -1,68 +1,68 @@
 {
   "direct": {
-    "mae_entradas": 8.598,
-    "rmse_entradas": 15.764,
-    "r2": 0.6202,
+    "mae_entradas": 6.982,
+    "rmse_entradas": 13.848,
+    "r2": 0.7654,
     "por_deporte": {
       "basketball": {
-        "mae_entradas": 7.88,
-        "rmse_entradas": 13.756,
-        "r2": 0.5795
+        "mae_entradas": 5.709,
+        "rmse_entradas": 9.868,
+        "r2": 0.6712
       },
       "football": {
-        "mae_entradas": 6.845,
-        "rmse_entradas": 12.621,
-        "r2": 0.6336
+        "mae_entradas": 6.016,
+        "rmse_entradas": 9.699,
+        "r2": 0.6295
       },
       "running": {
-        "mae_entradas": 13.077,
-        "rmse_entradas": 23.207,
-        "r2": 0.5701
+        "mae_entradas": 10.184,
+        "rmse_entradas": 21.561,
+        "r2": 0.7909
       },
       "tennis": {
-        "mae_entradas": 6.748,
-        "rmse_entradas": 10.12,
-        "r2": 0.5074
+        "mae_entradas": 6.124,
+        "rmse_entradas": 10.816,
+        "r2": 0.7038
       }
     }
   },
   "rate": {
-    "mae_entradas": 8.497,
-    "rmse_entradas": 15.473,
-    "r2": 0.6341,
+    "mae_entradas": 6.964,
+    "rmse_entradas": 13.747,
+    "r2": 0.7688,
     "por_deporte": {
       "basketball": {
-        "mae_entradas": 8.086,
-        "rmse_entradas": 14.298,
-        "r2": 0.5457
+        "mae_entradas": 5.637,
+        "rmse_entradas": 9.669,
+        "r2": 0.6843
       },
       "football": {
-        "mae_entradas": 6.507,
-        "rmse_entradas": 11.965,
-        "r2": 0.6707
+        "mae_entradas": 6.139,
+        "rmse_entradas": 9.872,
+        "r2": 0.6162
       },
       "running": {
-        "mae_entradas": 12.874,
-        "rmse_entradas": 22.614,
-        "r2": 0.5917
+        "mae_entradas": 10.072,
+        "rmse_entradas": 21.384,
+        "r2": 0.7943
       },
       "tennis": {
-        "mae_entradas": 6.841,
-        "rmse_entradas": 10.1,
-        "r2": 0.5093
+        "mae_entradas": 6.127,
+        "rmse_entradas": 10.701,
+        "r2": 0.7101
       }
     }
   },
   "baseline_media": {
-    "mae_entradas": 12.861,
-    "rmse_entradas": 24.527,
-    "r2": 0.0806
+    "mae_entradas": 12.167,
+    "rmse_entradas": 26.461,
+    "r2": 0.1434
   },
   "particion": {
-    "eventos_entrenamiento": 96,
-    "eventos_prueba": 24,
-    "filas_entrenamiento": 5760,
-    "filas_prueba": 1440,
+    "eventos_entrenamiento": 800,
+    "eventos_prueba": 200,
+    "filas_entrenamiento": 48000,
+    "filas_prueba": 12000,
     "semilla": 42
   }
 }
