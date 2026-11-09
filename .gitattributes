@@ -1,3 +1,2 @@
 dataset_v2_EQUIPO_FINAL.csv filter=lfs diff=lfs merge=lfs -text
 dataset_v2_XGBOOST_encoded_FINAL.csv filter=lfs diff=lfs merge=lfs -text
-*.csv filter=lfs diff=lfs merge=lfs -text
