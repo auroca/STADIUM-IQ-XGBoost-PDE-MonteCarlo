@@ -1271,12 +1271,21 @@ export default function Multisport() {
                         required
                         type="number"
                         min="0"
-                        max="1"
-                        step="0.01"
-                        placeholder="Ej. 0,60"
-                        value={custom.rivalry_index ?? ""}
+                        max="100"
+                        step="1"
+                        placeholder="Ej. 90"
+                        value={
+                          custom.rivalry_index === "" || custom.rivalry_index == null
+                            ? ""
+                            : Number((Number(custom.rivalry_index) * 100).toFixed(2))
+                        }
                         onChange={e =>
-                          updateCustom("rivalry_index", e.target.value)
+                          updateCustom(
+                            "rivalry_index",
+                            e.target.value === ""
+                              ? ""
+                              : String(Number(e.target.value) / 100)
+                          )
                         }
                       />
                     </>
@@ -1912,8 +1921,7 @@ export default function Multisport() {
                     <span>
                       Esta es la recomendación principal: busca
                       maximizar los ingresos durante todo el período
-                      restante. El precio para mañana se muestra como
-                      referencia y puede ser diferente.
+                      restante.
                     </span>
 
                   </div>
@@ -1924,6 +1932,100 @@ export default function Multisport() {
                     período. Se utilizan datos sintéticos.
                   </p>
 
+                </div>
+              )}
+
+              {/* CURVA DE VALOR DE BELLMAN */}
+              {pdeResult?.status === "ok" &&
+                Array.isArray(pdeResult.price_value_curve) &&
+                pdeResult.price_value_curve.length > 1 && (
+                <div className="ms-panel ms-chart">
+                  <div className="ms-chart-heading">
+                    <div>
+                      <div className="ms-eyebrow">
+                        OPTIMIZACIÓN MULTIPERÍODO - PDE
+                      </div>
+                      <h2>
+                        Ingresos esperados según el precio de hoy
+                      </h2>
+                    </div>
+                  </div>
+
+                  <p className="ms-muted">
+                    Cada punto representa el ingreso esperado
+                    durante los {pdeResult.horizon_days} días
+                    restantes: se aplica ese precio hoy y se
+                    sigue la política óptima desde mañana.
+                  </p>
+
+                  <div className="ms-plot">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={pdeResult.price_value_curve}
+                        margin={{
+                          top: 25,
+                          right: 28,
+                          bottom: 12,
+                          left: 12
+                        }}
+                      >
+                        <CartesianGrid
+                          stroke="#394461"
+                          strokeDasharray="4 4"
+                        />
+                        <XAxis
+                          dataKey="price"
+                          type="number"
+                          domain={["dataMin", "dataMax"]}
+                          tick={{ fill: "#aabce3" }}
+                          tickFormatter={v => `${fmt(v, 2)} EUR`}
+                        />
+                        <YAxis
+                          tick={{ fill: "#aabce3" }}
+                          width={85}
+                          domain={["auto", "auto"]}
+                          tickFormatter={v => fmt(v, 0)}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "#202a43",
+                            border: "1px solid #65739a",
+                            color: "#ffffff"
+                          }}
+                          labelFormatter={v =>
+                            `Precio de hoy: ${euro(v)}`
+                          }
+                          formatter={v => [
+                            euro(v), "Ingresos esperados"
+                          ]}
+                        />
+                        <ReferenceLine
+                          x={pdeResult.recommendation.price}
+                          stroke="#51d6ab"
+                          strokeDasharray="5 5"
+                        />
+                        <Line
+                          type="linear"
+                          dataKey="expected_total_revenue"
+                          name="Ingresos esperados"
+                          stroke="#51d6ab"
+                          strokeWidth={2.8}
+                          dot={{ r: 5 }}
+                          activeDot={{ r: 7 }}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="ms-muted">
+                    Nota: el eje vertical esta ampliado para facilitar la comparacion. Las diferencias visuales no representan incrementos proporcionales respecto a cero.
+                  </p>
+
+                  <p className="ms-muted">
+                    Valores esperados de Bellman para cada precio
+                    candidato, con el mismo estado inicial.
+                    Modelo basado en datos sintéticos.
+                  </p>
                 </div>
               )}
 

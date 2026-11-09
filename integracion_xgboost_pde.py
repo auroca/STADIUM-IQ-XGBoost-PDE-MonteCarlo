@@ -101,6 +101,28 @@ class ResultadoIntegracion:
     forma_nb: float
     niveles_stock: np.ndarray
     stock_inicial: int
+    alternativas_iniciales: np.ndarray | None = None
+
+    def curva_precios(self) -> list[dict]:
+        if self.alternativas_iniciales is None:
+            return []
+        return [
+            {
+                "price": float(precio),
+                "expected_total_revenue": float(
+                    self.alternativas_iniciales[j]
+                ),
+                "optimal": bool(
+                    j == int(
+                        self.politica[
+                            self.dias,
+                            self.indice_stock(self.stock_inicial)
+                        ]
+                    )
+                ),
+            }
+            for j, precio in enumerate(self.precios)
+        ]
 
     @property
     def dias(self):
@@ -187,6 +209,7 @@ def resolver(estado: dict, dias: int | None = None, stock: int | None = None,
 
     v = np.zeros((dias+1, len(niveles_stock)), dtype=float)
     pi = np.zeros((dias+1, len(niveles_stock)), dtype=np.int32)
+    alternativas_iniciales = None
     for d in range(1, dias + 1):
         for si, s in enumerate(niveles_stock[1:], start=1):
             alternativas = np.empty(len(precios))
@@ -204,9 +227,11 @@ def resolver(estado: dict, dias: int | None = None, stock: int | None = None,
                 alternativas[j] = precio * ventas + futuro
             mejor = int(np.argmax(alternativas))
             pi[d, si], v[d, si] = mejor, alternativas[mejor]
+            if d == dias and s == stock:
+                alternativas_iniciales = alternativas.copy()
     return ResultadoIntegracion(
         pi, v, tasas, medias, precios, estado, modo, forma_nb,
-        niveles_stock, stock
+        niveles_stock, stock, alternativas_iniciales
     )
 
 

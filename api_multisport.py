@@ -1023,6 +1023,7 @@ def optimize_pde(
         "candidate_prices": [
             float(p) for p in resultado.precios
         ],
+        "price_value_curve": resultado.curva_precios(),
         "caveat": (
             "Resultados experimentales basados en datos "
             "sintéticos. La incertidumbre no está calibrada "
@@ -1158,6 +1159,7 @@ def optimize_custom_pde(
         "candidate_prices": [
             float(p) for p in resultado.precios
         ],
+        "price_value_curve": resultado.curva_precios(),
         "uncertainty": {
             "distribution": "negative_binomial",
             "shape_parameter": forma_nb,
