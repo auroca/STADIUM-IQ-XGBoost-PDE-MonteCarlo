@@ -90,9 +90,9 @@ function validatePayload(payload) {
   if (
     !Number.isInteger(payload.remaining_capacity) ||
     payload.remaining_capacity < 1 ||
-    payload.remaining_capacity > 1000
+    payload.remaining_capacity > 5000
   ) {
-    return "Introduce entre 1 y 1000 entradas disponibles.";
+    return "Introduce entre 1 y 5000 entradas disponibles.";
   }
 
   if (

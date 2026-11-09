@@ -104,7 +104,9 @@ export default function History() {
     ["Rivalidad", levelName(custom?.derby_rivalry_index, [[0.2, "Baja"], [0.5, "Media"], [0.85, "Alta"]])],
     ["Posición local", custom?.league_position_home],
     ["Posición visitante", custom?.league_position_away],
-    ["Porcentaje de victorias", custom?.team_win_percentage],
+    ["Porcentaje de victorias", custom?.team_win_percentage == null || custom.team_win_percentage === ""
+      ? null
+      : `${fmt(Number(custom.team_win_percentage) * 100)} %`],
     ["Ranking del jugador", custom?.player_ranking],
     ["Ronda", custom?.tournament_round],
     ["Distancia", custom?.race_distance_km, " km"],

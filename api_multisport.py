@@ -1216,10 +1216,10 @@ def montecarlo_custom(
             "Monte Carlo admite hasta 15 días en esta versión."
         )
 
-    if req.remaining_capacity > 1000:
+    if req.remaining_capacity > 5000:
         raise HTTPException(
             422,
-            "Monte Carlo admite hasta 1000 entradas disponibles."
+            "Monte Carlo admite hasta 5000 entradas disponibles."
         )
 
     if req.remaining_capacity == 0:

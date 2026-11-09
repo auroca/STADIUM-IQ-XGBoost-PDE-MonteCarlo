@@ -197,15 +197,25 @@ export default function Multisport() {
 
     const previous = savedEvents.find(event => event.id === id);
 
+    const primaryPdeRecommendation =
+      pdeResult?.status === "ok"
+        ? pdeResult.recommendation
+        : null;
+
     const historyEntry = {
       id: `${id}-${now}`,
       createdAt: now,
       ticketCategory: activeCustomCategory,
-      recommendedPrice: result.optimal?.price ?? null,
+      recommendedPrice: primaryPdeRecommendation?.price ?? result.optimal?.price ?? null,
       referencePrice: result.reference?.price ?? null,
-      estimatedSales: result.optimal?.sales ?? null,
-      estimatedRevenue: result.optimal?.revenue ?? null,
+      estimatedSales: primaryPdeRecommendation?.expected_sales_next_day ?? result.optimal?.sales ?? null,
+      estimatedRevenue: primaryPdeRecommendation?.expected_revenue_next_day ?? result.optimal?.revenue ?? null,
       model,
+      strategy: primaryPdeRecommendation
+        ? "xgboost_pde"
+        : "xgboost_immediate",
+      expectedTotalRevenue:
+        primaryPdeRecommendation?.expected_total_revenue ?? null,
       custom: { ...custom },
       days
     };
@@ -219,6 +229,9 @@ export default function Multisport() {
       model,
       custom: { ...custom },
       lastResult: result,
+      lastPdeResult: pdeResult?.status === "ok"
+        ? pdeResult
+        : null,
       updatedAt: now,
       history: [...(previous?.history || []), historyEntry]
     };
@@ -1932,7 +1945,35 @@ export default function Multisport() {
                     período. Se utilizan datos sintéticos.
                   </p>
 
-                </div>
+                                  {/* GUARDADO PRINCIPAL PDE */}
+                  <button
+                  type="button"
+                  className={
+                    `ms-save-event${
+                      savedFeedback
+                        ? " saved"
+                        : ""
+                    }`
+                  }
+                  onClick={saveEvent}
+                >
+                  <Icon
+                    name={
+                      savedFeedback
+                        ? "check_circle"
+                        : "save"
+                    }
+                    size={18}
+                  />
+
+                  {savedFeedback
+                    ? "Evento guardado correctamente"
+                    : currentSavedEvent
+                      ? "Guardar nueva recomendación"
+                      : "Guardar evento y recomendación"}
+                </button>
+
+</div>
               )}
 
               {/* CURVA DE VALOR DE BELLMAN */}
