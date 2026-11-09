@@ -16,7 +16,7 @@ const sections = [
   {
     icon: "monitoring",
     tag: "EVALUACIÓN EXPERIMENTAL",
-    title: "Resultados y validación",
+    title: "Comparador de estrategias",
     description:
       "Compara estrategias de precio y consulta el comportamiento de las simulaciones.",
     path: "/validation",

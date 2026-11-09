@@ -224,14 +224,24 @@ export default function MonteCarloPanel() {
     ingresos: row.ingresos_medios_eur
   }));
 
-  const best = rows.length
-    ? rows.reduce(
-        (a, b) =>
-          a.ingresos_medios_eur >= b.ingresos_medios_eur
-            ? a
-            : b
-      )
+  // Un empate se determina con la precision de ingresos mostrada (centimos).
+  const maxIngresos = rows.length
+    ? Math.max(...rows.map(row => Number(row.ingresos_medios_eur)))
     : null;
+
+  const ganadoras = maxIngresos === null
+    ? []
+    : rows.filter(row =>
+        Math.abs(Number(row.ingresos_medios_eur) - maxIngresos) < 0.005
+      );
+
+  const etiquetaGanadoras = ganadoras.length > 1
+    ? `Empate en ingresos medios: ${ganadoras.map(row =>
+        STRATEGIES[row.politica] || row.politica
+      ).join(" y ")}`
+    : ganadoras.length === 1
+      ? STRATEGIES[ganadoras[0].politica] || ganadoras[0].politica
+      : "No disponible";
 
   const difference =
     pde && immediate
@@ -315,7 +325,7 @@ export default function MonteCarloPanel() {
   return (
     <section style={{
       ...panelStyle,
-      marginTop: 30
+      marginTop: 0
     }}>
       <div style={{
         fontSize: 12,
@@ -323,17 +333,17 @@ export default function MonteCarloPanel() {
         letterSpacing: 1.5,
         color: "#aa9bff"
       }}>
-        VALIDACIÓN DEL MODELO DE PRICING
+        CONFIGURACIÓN Y RESULTADOS DEL ESCENARIO
       </div>
 
       <h2 style={{ marginTop: 12 }}>
-        Evaluación mediante Monte Carlo
+        Comparador de estrategias
       </h2>
 
       <p style={mutedStyle}>
-        XGBoost estima las ventas, la PDE optimiza el precio
-        y Monte Carlo evalúa cómo podrían variar los
-        resultados de esa estrategia.
+        Selecciona un evento guardado y compara precio fijo,
+        XGBoost inmediato y XGBoost + PDE bajo la misma
+        configuración de simulación.
       </p>
 
       {/* SELECCIÓN DEL EVENTO */}
@@ -493,11 +503,10 @@ export default function MonteCarloPanel() {
             {sensitivityOpen && (
               <div style={{ marginTop: 16 }}>
                 <p style={mutedStyle}>
-                  Estas pruebas reducen artificialmente
-                  la media de demanda para comprobar
-                  cómo responde cada estrategia cuando
-                  la previsión de XGBoost es demasiado
-                  optimista.
+                  Estas pruebas modifican hipoteticamente la
+                  demanda (30 %, 60 % y 130 % del pronostico)
+                  para estudiar la sensibilidad de las politicas.
+                  No se recalculan las politicas para cada escenario.
                 </p>
 
                 <div style={{
@@ -505,7 +514,11 @@ export default function MonteCarloPanel() {
                   gap: 10,
                   flexWrap: "wrap"
                 }}>
-                  {[30, 60, 100].map(factor => (
+                  {(result.scenarios || []).map(item => Number(item.demanda_porcentaje))
+                    .filter((factor, index, values) =>
+                      [30, 60, 100, 130].includes(factor) &&
+                      values.indexOf(factor) === index
+                    ).sort((a, b) => a - b).map(factor => (
                     <button
                       key={factor}
                       type="button"
@@ -551,74 +564,64 @@ export default function MonteCarloPanel() {
             </p>
           </div>
 
+          {/* TRES POLÍTICAS CON LA MISMA IMPORTANCIA VISUAL */}
           <div style={{
             display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(180px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 14,
             marginTop: 20
           }}>
-            <Metric
-              title="Ingresos medios XGBoost + PDE"
-              value={pde
-                ? euro(pde.ingresos_medios_eur)
-                : "No disponible"}
-              detail="Resultado de la política PDE"
-            />
-
-            <Metric
-              title="Mejora PDE frente a precio fijo"
-              value={
-                improvement === null
-                  ? "No disponible"
-                  : `${
-                      improvement >= 0 ? "+" : ""
-                    }${fmt(improvement, 2)} %`
-              }
-            />
-
-            <Metric
-              title="Diferencia PDE frente a XGBoost inmediato"
-              value={
-                difference === null
-                  ? "No disponible"
-                  : `${
-                      difference >= 0 ? "+" : ""
-                    }${euro(difference)}`
-              }
-            />
+            {[
+              { data: fixed, label: "Precio fijo", color: COLORS.precio_fijo },
+              { data: immediate, label: "XGBoost inmediato", color: COLORS.XGBoost_inmediato },
+              { data: pde, label: "XGBoost + PDE", color: COLORS.XGBoost_PDE }
+            ].map(({ data, label, color }) => (
+              <div key={label} style={{
+                background: "#202a43",
+                border: "1px solid #394461",
+                borderTop: `3px solid ${color}`,
+                borderRadius: 12,
+                padding: 20,
+                minWidth: 0
+              }}>
+                <div style={{ color: "#b8c6e5", fontSize: 13, marginBottom: 10 }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: "clamp(23px, 2vw, 32px)", fontWeight: 800 }}>
+                  {data ? euro(data.ingresos_medios_eur) : "No disponible"}
+                </div>
+                <div style={{ color: "#b8c6e5", fontSize: 12, marginTop: 9 }}>
+                  {data ? `Ocupación: ${fmt(data.ocupacion_media_pct)} %` : "Ingresos medios simulados"}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div style={{
-            marginTop: 24,
             padding: 18,
+            marginTop: 18,
             background: "#202a43",
             border: "1px solid #394461",
             borderRadius: 12
           }}>
-            <p style={{
-              ...mutedStyle,
-              margin: "0 0 8px"
-            }}>
-              Estrategia con mayores ingresos
-              medios en este escenario
+            <div style={{ fontSize: 12, color: "#b8c6e5", marginBottom: 8 }}>
+              CONCLUSIÓN DEL ESCENARIO
+            </div>
+            <strong style={{ fontSize: 18 }}>{etiquetaGanadoras}</strong>
+            <p style={{ ...mutedStyle, margin: "10px 0 0" }}>
+              {pde && fixed && immediate ? (
+                <>
+                  PDE frente a precio fijo: {improvement >= 0 ? "+" : ""}{fmt(improvement, 2)} %.
+                  {" "}PDE frente a XGBoost inmediato: {difference >= 0 ? "+" : ""}{euro(difference)}.
+                  {" "}Se comparan ingresos medios simulados, no precios recomendados para hoy.
+                </>
+              ) : "Completa una simulación para obtener la comparación."}
             </p>
-
-            <strong style={{ fontSize: 20 }}>
-              {best
-                ? STRATEGIES[best.politica]
-                : "No disponible"}
-            </strong>
-
-            <p style={{
-              ...mutedStyle,
-              fontSize: 12,
-              marginBottom: 0
-            }}>
-              Este resultado es una comparación
-              simulada, no una nueva recomendación
-              automática de precio.
-            </p>
+            {ganadoras.length > 1 && (
+              <p style={{ ...mutedStyle, margin: "8px 0 0", fontSize: 12 }}>
+                El empate se refiere a ingresos medios redondeados; los indicadores de riesgo pueden ser diferentes.
+              </p>
+            )}
           </div>
 
           {/* GRÁFICO COMPARATIVO */}
@@ -779,9 +782,10 @@ export default function MonteCarloPanel() {
             <p style={mutedStyle}>
               La distribución binomial negativa introduce
               variabilidad aleatoria en la demanda.
-              Los escenarios opcionales del 30 % y 60 %
-              representan reducciones hipotéticas
-              respecto a la previsión.
+              Los escenarios opcionales del 30 %, 60 %
+              y 130 % representan cambios hipotéticos
+              respecto a la previsión. Las políticas
+              se calculan con la demanda de referencia.
             </p>
 
             <p style={mutedStyle}>

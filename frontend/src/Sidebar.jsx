@@ -21,7 +21,7 @@ const navigation = [
   {
     path: "/validation",
     icon: "monitoring",
-    label: "Resultados y validación"
+    label: "Comparador"
   },
   {
     path: "/simulator",

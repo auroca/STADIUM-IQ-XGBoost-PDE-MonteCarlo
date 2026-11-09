@@ -26,6 +26,32 @@ def cargar_xgboost():
     return paquete
 
 
+def preparar_escenarios_precio(escenarios: pd.DataFrame, precios, base: float) -> pd.DataFrame:
+    """Actualiza de manera coherente las features dependientes del precio.
+
+    El precio anterior es el observado en el snapshot; el estado de Bellman
+    actual no modela cambios de precio anteriores entre días futuros.
+    """
+    precios = np.asarray(precios, dtype=float)
+    if base <= 0 or not np.isfinite(base) or not np.isfinite(precios).all() or np.any(precios <= 0):
+        raise ValueError("Los precios deben ser positivos y finitos")
+    escenarios = escenarios.copy()
+    escenarios["current_price"] = precios
+    escenarios["candidate_price"] = precios
+    escenarios["price_vs_base"] = precios / base - 1.0
+    escenarios["discount_active"] = (precios < base).astype(int)
+    if "previous_price" in escenarios.columns:
+        anterior = pd.to_numeric(escenarios["previous_price"], errors="coerce")
+        escenarios["price_change_pct"] = np.where(
+            anterior.notna() & (anterior > 0),
+            100.0 * (precios / anterior.replace(0, np.nan) - 1.0),
+            np.nan,
+        )
+    else:
+        escenarios["price_change_pct"] = np.nan
+    return escenarios
+
+
 def predecir_ventas(estado: dict, precios, modo: str = "rate") -> pd.DataFrame:
     """Predice ventas del SIGUIENTE período para varios precios candidatos.
 
@@ -63,8 +89,7 @@ def predecir_ventas(estado: dict, precios, modo: str = "rate") -> pd.DataFrame:
             escenarios[columna] = "no_aplica"
 
     # Recalcular las variables que cambian cuando probamos otro precio.
-    escenarios["current_price"] = precios
-    escenarios["price_vs_base"] = precios / base - 1.0
+    escenarios = preparar_escenarios_precio(escenarios, precios, base)
     escenarios["remaining_capacity"] = stock
 
     # El inventario de un estado nuevo cambia también la ocupación.

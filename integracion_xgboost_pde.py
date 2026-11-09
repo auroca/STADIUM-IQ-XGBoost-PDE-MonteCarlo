@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import nbinom
 
-from predictor_xgboost import cargar_xgboost
+from predictor_xgboost import cargar_xgboost, preparar_escenarios_precio
 from multisport_model import NUMERIC, CATEGORICAL, encode_features, predict_sales
 
 ROOT = Path(__file__).resolve().parent
@@ -152,8 +152,7 @@ def calcular_probabilidades(estado: dict, dias: int, niveles_stock: np.ndarray,
         df['remaining_capacity'] = stocks
         df['cumulative_sales'] = capacidad - stocks
         df['occupancy_rate'] = (capacidad - stocks) / capacidad
-        df['current_price'] = ps
-        df['price_vs_base'] = ps / base - 1.0
+        df = preparar_escenarios_precio(df, ps, base)
         periodo = int(estado.get('sales_window_days', 30))
         transcurridos = max(1, periodo-d+1)
         df['sales_period'] = ('early' if transcurridos <= periodo/3 else
@@ -193,9 +192,15 @@ def resolver(estado: dict, dias: int | None = None, stock: int | None = None,
             alternativas = np.empty(len(precios))
             for j, precio in enumerate(precios):
                 mu = float(medias[d, si, j])
-                ventas = float(media_ventas_limitadas(mu, s, forma_nb))
-                siguiente = max(0.0, s - ventas)
-                futuro = float(np.interp(siguiente, niveles_stock, v[d-1]))
+                # Bellman estocástico: esperanza sobre todas las ventas posibles.
+                # P(D >= s) se agrupa como la transición a inventario cero.
+                p_nb = forma_nb / (forma_nb + mu)
+                k = np.arange(int(s), dtype=int)
+                probs = nbinom.pmf(k, forma_nb, p_nb)
+                prob_agotar = float(nbinom.sf(int(s) - 1, forma_nb, p_nb))
+                ventas = float(np.dot(k, probs) + s * prob_agotar)
+                futuros = np.interp(s - k, niveles_stock, v[d - 1])
+                futuro = float(np.dot(probs, futuros) + prob_agotar * v[d - 1, 0])
                 alternativas[j] = precio * ventas + futuro
             mejor = int(np.argmax(alternativas))
             pi[d, si], v[d, si] = mejor, alternativas[mejor]
@@ -214,9 +219,9 @@ def tabla_politica(resultado: ResultadoIntegracion) -> pd.DataFrame:
                 'dias_restantes': d,
                 'inventario_restante': s,
                 'precio_optimo_eur': float(resultado.precios[j]),
-                'ventas_esperadas_proximo_dia': s*float(resultado.probabilidades[d, s, j]),
-                'demanda_potencial_media_estimada': float(resultado.medias_latentes[d, s, j]),
-                'ingresos_acumulados_esperados_eur': float(resultado.valores[d, s]),
+                'ventas_esperadas_proximo_dia': s*float(resultado.probabilidades[d, si, j]),
+                'demanda_potencial_media_estimada': float(resultado.medias_latentes[d, si, j]),
+                'ingresos_acumulados_esperados_eur': float(resultado.valores[d, si]),
             })
     return pd.DataFrame(filas)
 

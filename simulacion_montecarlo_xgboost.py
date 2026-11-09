@@ -22,7 +22,7 @@ def simular(resultado, replicas=500, semilla=42, factor_demanda=1.0):
     dias, stock_inicial = resultado.dias, resultado.stock
     precios, tasas, medias = resultado.precios, resultado.probabilidades, resultado.medias_latentes
     forma_nb = resultado.forma_nb
-    greedy = np.argmax(tasas*np.arange(stock_inicial+1)[None,:,None]*precios, axis=2)
+    greedy = np.argmax(tasas*resultado.niveles_stock[None,:,None]*precios, axis=2)
     fijo = int(np.argmin(np.abs(precios - float(resultado.estado['base_price']))))
     politicas = ('precio_fijo','XGBoost_inmediato','XGBoost_PDE')
     rng = np.random.default_rng(semilla)
@@ -34,15 +34,16 @@ def simular(resultado, replicas=500, semilla=42, factor_demanda=1.0):
             for i, d in enumerate(range(dias, 0, -1)):
                 if stock <= 0:
                     break
+                si = resultado.indice_stock(stock)
                 if nombre == 'precio_fijo':
                     j = fijo
                 elif nombre == 'XGBoost_inmediato':
-                    j = int(greedy[d,stock])
+                    j = int(greedy[d,si])
                 else:
-                    j = int(resultado.politica[d,stock])
+                    j = int(resultado.politica[d,si])
                 # El escenario de sensibilidad cambia la media latente, NO la tasa
                 # de ventas censuradas. De esta forma sigue siendo una distribución NB.
-                mu = max(0.0, float(medias[d,stock,j])*factor_demanda)
+                mu = max(0.0, float(medias[d,si,j])*factor_demanda)
                 prob = forma_nb/(forma_nb+mu)
                 demanda = int(nbinom.ppf(uniformes[rep,i], forma_nb, prob))
                 ventas = min(stock, demanda)

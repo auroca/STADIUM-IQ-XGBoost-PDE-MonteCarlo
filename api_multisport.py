@@ -1193,7 +1193,7 @@ def montecarlo_custom(
     2. XGBoost con optimización inmediata.
     3. XGBoost + PDE.
 
-    Escenarios de demanda: 30 %, 60 % y 100 %.
+    Escenarios de demanda: 30 %, 60 %, 100 % y 130 %.
     """
 
     if DATA is None or BUNDLE is None:
@@ -1303,7 +1303,7 @@ def montecarlo_custom(
 
         escenarios = []
 
-        for factor in [0.3, 0.6, 1.0]:
+        for factor in [0.3, 0.6, 1.0, 1.3]:
 
             resumen, _ = simular(
                 resultado,
